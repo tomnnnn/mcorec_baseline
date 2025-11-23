@@ -1,4 +1,5 @@
 import numpy as np
+import re
 from typing import List, Tuple, Dict
 from vllm import LLM, SamplingParams
 
@@ -81,17 +82,26 @@ def calculate_conversation_scores_llm(speaker_segments: Dict[str, List[Tuple[Tup
                     - Outputs near 0.5 should only be used when there is genuine ambiguity.
 
                     Do NOT assume coherence unless the evidence strongly supports it.
-                    Strictly return only the numeric score."""},
+                    """},
+                    {"role": "system", "content": """
+                    You MUST return only a floating-point number strictly between 0 and 1.
+                    Do not include any text or labels. Do not write anything except the number.
+                    """},
                     {"role": "user", "content": prompt},
-                    {"role": "assistant", "content": "The score is: "}
                 ],
-                add_generation_prompt=False,
+                add_generation_prompt=True,
                 use_tqdm=False,
                 sampling_params=sampling_params
             )
 
-            output = completion[0].outputs[0].text.strip()
-            score = float(output)
+            raw = completion[0].outputs[0].text.strip()
+            num = re.search(r"\d*\.?\d+", raw)
+            if not num:
+                raise ValueError(f"Invalid numeric output: {raw}")
+            score = float(num.group())
+
+            if not 0 <= score <= 1:
+                raise ValueError(f"Out-of-range score: {score}")
 
             scores[i, j] = score
             scores[j, i] = score  # Symmetric matrix

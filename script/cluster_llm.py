@@ -7,7 +7,6 @@ import sys
 import json
 import argparse
 import tqdm
-import asyncio
 from typing import Dict, Tuple
 import vllm
 

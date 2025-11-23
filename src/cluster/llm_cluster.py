@@ -1,6 +1,6 @@
 import numpy as np
 from typing import List, Tuple, Dict
-from vllm import LLM
+from vllm import LLM, SamplingParams
 
 def combine_speaker_segments(speaker_segments: Dict[str, List[Tuple[Tuple[float, float], str]]]) -> str:
     """
@@ -63,25 +63,32 @@ def calculate_conversation_scores_llm(speaker_segments: Dict[str, List[Tuple[Tup
                 """
             )
 
-            completion = model.chat(messages=[
-                    {"role": "system", "content": """
-                        You are an evaluator determining whether two sets of utterances come from the same
-                        conversation. Often, the segments are from completely unrelated conversations.
+            # Use 0 temperature for deterministic output
+            sampling_params = SamplingParams(temperature=0.0)
 
-                        Your task is to detect whether the segments logically follow each other in topic, 
-                        participants, and conversational context. Consider contradictions in topic, tone, time,
-                        and speaker roles as strong evidence that they are NOT from the same conversation.
+            completion = model.chat(
+                messages=[{"role": "system", "content": """
+                    You are an evaluator determining whether two sets of utterances come from the same
+                    conversation. Often, the segments are from completely unrelated conversations.
 
-                        Return a score strictly between 0 and 1:
-                        - 0 = definitely different conversations
-                        - 1 = definitely the same conversation
-                        - Outputs near 0.5 should only be used when there is genuine ambiguity.
+                    Your task is to detect whether the segments logically follow each other in topic, 
+                    participants, and conversational context. Consider contradictions in topic, tone, time,
+                    and speaker roles as strong evidence that they are NOT from the same conversation.
 
-                        Do NOT assume coherence unless the evidence strongly supports it.
-                        Strictly return only the numeric score."""},
-                    {"role": "user", "content": prompt}
-            ],
-            use_tqdm=True)
+                    Return a score strictly between 0 and 1:
+                    - 0 = definitely different conversations
+                    - 1 = definitely the same conversation
+                    - Outputs near 0.5 should only be used when there is genuine ambiguity.
+
+                    Do NOT assume coherence unless the evidence strongly supports it.
+                    Strictly return only the numeric score."""},
+                    {"role": "user", "content": prompt},
+                    {"role": "assistant", "content": "The score is: "}
+                ],
+                add_generation_prompt=False,
+                use_tqdm=False,
+                sampling_params=sampling_params
+            )
 
             output = completion[0].outputs[0].text.strip()
             score = float(output)

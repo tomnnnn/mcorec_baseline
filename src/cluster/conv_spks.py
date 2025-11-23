@@ -117,7 +117,7 @@ def calculate_conversation_scores(speaker_segments: Dict[str, List[Tuple[float, 
 def cluster_speakers(scores: np.ndarray, 
                     speaker_ids: List[str],
                     threshold: float = 0.7,
-                    n_clusters: int = None) -> Dict[int, List[str]]:
+                    n_clusters: int = None) -> Dict[str, int]:
     """
     Cluster speakers based on their conversation scores.
     

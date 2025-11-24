@@ -18,8 +18,9 @@ from src.cluster.llm_cluster import calculate_conversation_scores_llm
 from src.cluster.conv_spks import cluster_speakers
 
 class ClusterEngine():
-    def __init__(self, model: str):
+    def __init__(self, model: str, num_gpus: int):
         self.model = model
+        self.num_gpus = num_gpus
 
     def init_model(self):
         """
@@ -29,7 +30,8 @@ class ClusterEngine():
         self.llm = vllm.LLM(
             model=self.model,
             gpu_memory_utilization=0.9,
-            max_model_len=150000
+            tensor_parallel_size=self.num_gpus,
+            max_model_len=10*1024,
         )
 
     def __parse_vtt_segments(self, vtt_lines: list) -> list[Tuple[Tuple[float,float], str]]:
@@ -99,6 +101,7 @@ if __name__ == "__main__":
     args.add_argument("--data-dir", type=str, default="data-bin/dev", help="Path to the data directory containing session folders.")
     args.add_argument("--output-dir", type=str, default="output", help="Path to the output directory to save clustering results.")
     args.add_argument("--model", type=str, default="TBA", help="LLM model to use for clustering.")
+    args.add_argument("--num-gpus", type=int, default=1, help="Number of GPUs on one node to use.")
     args = args.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -108,7 +111,7 @@ if __name__ == "__main__":
 
     print(f"Clustering sessions in {args.data_dir} using LLM model: {args.model}")
 
-    engine = ClusterEngine(args.model)
+    engine = ClusterEngine(args.model, args.num_gpus)
     engine.init_model()
 
     for session_dir in tqdm.tqdm(session_dirs, desc="Clustering Sessions", unit="session"):

@@ -28,7 +28,8 @@ class ClusterEngine():
 
         self.llm = vllm.LLM(
             model=self.model,
-            gpu_memory_utilization=0.9
+            gpu_memory_utilization=0.9,
+            max_model_len=150000
         )
 
     def __parse_vtt_segments(self, vtt_lines: list) -> list[Tuple[Tuple[float,float], str]]:
@@ -112,7 +113,7 @@ if __name__ == "__main__":
 
     for session_dir in tqdm.tqdm(session_dirs, desc="Clustering Sessions", unit="session"):
         session_name = os.path.basename(session_dir)
-        output_dir = os.path.join(session_dir, "output")
+        output_dir = os.path.join(session_dir, args.output_dir)
 
         print(f"Clustering session: {session_name}")
 

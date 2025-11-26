@@ -8,6 +8,7 @@ import json
 import argparse
 import tqdm
 from typing import Dict, Tuple
+import numpy as np
 import vllm
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -15,12 +16,13 @@ if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
 from src.cluster.llm_cluster import calculate_conversation_scores_llm
-from src.cluster.conv_spks import cluster_speakers
+from src.cluster.conv_spks import (cluster_speakers, calculate_conversation_scores)
 
 class ClusterEngine():
-    def __init__(self, model: str, num_gpus: int):
+    def __init__(self, model: str, num_gpus: int, combined: bool = False):
         self.model = model
         self.num_gpus = num_gpus
+        self.combined = combined
 
     def init_model(self):
         """
@@ -88,8 +90,20 @@ class ClusterEngine():
             speaker_ids.append(speaker_id)
 
         # Perform clustering
-        conv_scores = calculate_conversation_scores_llm(speaker_segments, self.llm)
-        clustered_speakers = cluster_speakers(conv_scores, speaker_ids)
+        conv_scores_llm = calculate_conversation_scores_llm(speaker_segments, self.llm)
+
+        if self.combined:
+            conv_scores_spks = calculate_conversation_scores(speaker_segments)
+            combined_scores = np.empty((len(speaker_ids), len(speaker_ids)))
+            for spk1 in speaker_ids:
+                for spk2 in speaker_ids:
+                    score_llm = conv_scores_llm[spk1][spk2]
+                    score_spks = conv_scores_spks[spk1][spk2]
+                    combined_score = (score_llm + score_spks) / 2.0
+                    combined_scores[spk1][spk2] = combined_score
+            clustered_speakers = cluster_speakers(combined_scores, speaker_ids)
+        else:
+            clustered_speakers = cluster_speakers(conv_scores_llm, speaker_ids)
 
         # Save clustering results
         os.makedirs(output_dir, exist_ok=True)
@@ -102,16 +116,15 @@ if __name__ == "__main__":
     args.add_argument("--output-dir", type=str, default="output", help="Path to the output directory to save clustering results.")
     args.add_argument("--model", type=str, default="TBA", help="LLM model to use for clustering.")
     args.add_argument("--num-gpus", type=int, default=1, help="Number of GPUs on one node to use.")
+    args.add_argument("--combined", action="store_true", help="Whether to use combined LLM and segment overlap embedding scores.")
     args = args.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
     session_dirs = [os.path.join(args.data_dir, d) for d in os.listdir(args.data_dir) if os.path.isdir(os.path.join(args.data_dir, d))]
 
-    api_key = os.getenv("LLM_API_KEY") or ""
-
     print(f"Clustering sessions in {args.data_dir} using LLM model: {args.model}")
 
-    engine = ClusterEngine(args.model, args.num_gpus)
+    engine = ClusterEngine(args.model, args.num_gpus, args.combined)
     engine.init_model()
 
     for session_dir in tqdm.tqdm(session_dirs, desc="Clustering Sessions", unit="session"):

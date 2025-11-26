@@ -1,0 +1,37 @@
+#!/bin/bash
+
+#PBS -N spk_clstr_llm
+#PBS -l select=1:ncpus=1:ngpus=1:mem=32gb:gpu_mem=20gb:scratch_local=50gb
+#PBS -l walltime=1:00:00
+#PBS -o logs/stdout.log
+#PBS -e logs/stderr.log
+
+PWD=/storage/brno2/home/tomn/mcorec/mcorec_baseline
+EXP_PWD=$PWD/exps/llm_basic
+
+cd $PWD
+
+module add mambaforge
+module add cuda/12.6
+
+mamba activate ./venv
+
+export TMPDIR=$SCRATCHDIR
+export HF_HOME=/storage/brno2/home/tomn/.hf
+export CUDA_VISIBLE_DEVICES=0
+
+mkdir -p results
+
+MODEL_NAME=$(basename $MODEL)
+
+echo "Starting experiment with model: $MODEL"
+python script/cluster_llm.py --model $MODEL --output-dir "output/$MODEL_NAME" --combined
+
+echo "Evaluating experiment results"
+python script/eval_cluster.py --session_dir "$PWD/data-bin/dev/*" --output_dir_name "output/$MODEL_NAME" \
+	| grep "Average Conversation Clustering F1 score:" \
+	| awk -F": " -v m="$MODEL" '{print m "," $2}' >> $EXP_PWD/results/f1_scores.csv
+
+echo "Experiment completed. Results saved to results/f1_scores.csv"
+
+clean_scratch > dev/null

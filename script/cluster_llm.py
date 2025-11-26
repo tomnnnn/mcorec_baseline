@@ -93,7 +93,14 @@ class ClusterEngine():
         conv_scores_llm = calculate_conversation_scores_llm(speaker_segments, self.llm)
 
         if self.combined:
-            conv_scores_spks = calculate_conversation_scores(speaker_segments)
+            # trasnform speaker segments (expects Dict[str, Tuple[float,float]])
+            # speaker_segments: Dictionary mapping speaker IDs to their time segments
+
+            spk_segments_simple: Dict[str, list] = {}
+            for spk, segs in speaker_segments.items():
+                spk_segments_simple[spk] = [(seg[0][0], seg[0][1]) for seg in segs]
+
+            conv_scores_spks = calculate_conversation_scores(spk_segments_simple)
             combined_scores = np.empty((len(speaker_ids), len(speaker_ids)))
             for spk1 in speaker_ids:
                 for spk2 in speaker_ids:
